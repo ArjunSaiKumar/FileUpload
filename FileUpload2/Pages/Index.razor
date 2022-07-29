@@ -1,0 +1,111 @@
+﻿@page "/"
+@using FileUpload2.Data
+@inject PdfUploadService FileUploadService
+@using System.IO
+
+
+<h1>File Upload & Download</h1>
+
+<InputFile OnChange="OnInputFileChange" multiple/>
+<button class="btn btn-success" @onclick="FileUploadToSqlDb">Save</button>
+<br />
+<label>@labeltext</label>
+
+@if (imagelist != null && imagelist.Count > 0)
+{
+    <div class="col-12 image-list">
+        <table class="table table-bordered">
+            <tr>
+                <th>ID</th>
+                <th>File</th>
+                <th>File Name</th>
+                <th>Action</th>
+            </tr>
+        @foreach(var img in imagelist)
+        {
+            <tr>
+                <td>@img.FileId</td>
+                <td>
+                        @if (img.ContentType == "application/pdf")
+                        {
+                            <img src="css/Image/PDF.png" width="80" height="80">
+                        }
+                        else
+                        {
+                            imgBase64 = @img.Base64File;
+                            <img src="@img.Base64File" width="80" height="80"/>
+                        }
+                    </td>
+                    <td>
+                        @img.FileName
+                    </td>
+                    <td>
+                        <a download="@img.FileName" href="@img.Base64File" target="_blank"><img src="css/Image/Download.png" width="80" height="80"></a>
+                        <img src="css/Image/Delete.png" width="80" height="80" @onclick="@(e=> DeleteFile(@img.FileId))"/>
+                    </td>
+
+            </tr>
+            <iframe src="@img.Base64File"  width="1000" height="1000" type="application/pdf"></iframe>
+        }
+        </table>
+        @*<div>
+            <iframe src="data:application/pdf;base64,@imgBase64" type="application/pdf"></iframe>
+        </div>*@
+    </div>
+}
+
+@code{
+
+    IList<UploadFileInfo> imagelist = new List<UploadFileInfo>();
+    string labeltext = "";
+    private long maxfilesize = 9999999;
+    string imgBase64 = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetUploadFile();
+    }
+
+    async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        var imageFiles = e.GetMultipleFiles();
+
+        foreach (var img in imageFiles)
+        {
+            var format = img.ContentType;
+            var imageInfo = new UploadFileInfo();
+            Stream stream = img.OpenReadStream(maxfilesize);
+            MemoryStream ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            stream.Close();
+
+            var imgUrl = $"data:{format};base64,{Convert.ToBase64String(ms.ToArray())}";
+
+
+            imageInfo.FileName = img.Name;
+            imageInfo.File = ms.ToArray();
+            imageInfo.ContentType = img.ContentType;
+            imageInfo.Base64File = imgUrl;
+
+            imagelist.Add(imageInfo);
+        }
+    }
+
+    public async void FileUploadToSqlDb()
+    {
+        await FileUploadService.UploadFiles(imagelist);
+        labeltext = "Upload Success";
+        GetUploadFile();
+        this.StateHasChanged();
+    }
+    public async Task GetUploadFile()
+    {
+        imagelist = await FileUploadService.GetUploadFiles();        
+    }
+    public async Task DeleteFile(int id)
+    {
+        await FileUploadService.DeleteFiles(id);
+        GetUploadFile();
+        this.StateHasChanged();
+    }
+}
